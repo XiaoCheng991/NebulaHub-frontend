@@ -1,79 +1,47 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+export async function middleware(req: NextRequest) {
+  // 从cookie获取token（服务端）
+  const token = req.cookies.get('token')?.value
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          supabaseResponse.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.delete(name)
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          supabaseResponse.cookies.delete(name)
-        },
-      },
-    }
-  )
-
-  // 获取当前会话
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  // 需要认证的路径
+  // 定义受保护的路径
   const protectedPaths = ['/dashboard', '/chat', '/drive', '/settings']
-  const isProtectedPath = protectedPaths.some(path => 
-    request.nextUrl.pathname === path || 
-    request.nextUrl.pathname.startsWith(path + '/')
-  )
+  const authPaths = ['/login', '/register']
 
-  // 如果访问受保护的路径但没有会话，则重定向到登录页
-  if (isProtectedPath && !session) {
-    const url = request.nextUrl.clone()
+  const { pathname } = req.nextUrl
+
+  // 检查是否是受保护的路径
+  const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path))
+  const isAuthPath = authPaths.some(path => pathname.startsWith(path))
+
+  // 如果访问受保护路径但没有token，重定向到登录页
+  if (isProtectedPath && !token) {
+    const url = req.nextUrl.clone()
     url.pathname = '/login'
-    url.search = `?redirectedFrom=${encodeURIComponent(request.url)}`
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
-}
+  // 如果已登录用户访问登录/注册页，重定向到dashboard
+  if (isAuthPath && token) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
 
-export default middleware
+  return NextResponse.next()
+}
 
 export const config = {
   matcher: [
     /*
-     * 匹配所有路径除了:
-     * - _next/static (静态文件)
-     * - _next/image (图片优化)
-     * - favicon.ico (网站图标)
-     * - images - .svg, .png, .jpg, .jpeg, .gif, .webp
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

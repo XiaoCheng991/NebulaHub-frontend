@@ -3,8 +3,11 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import GlobalHeader from '@/components/branding/GlobalHeader';
 import { Toaster } from "@/components/ui/toaster";
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getServerUserInfo } from '@/lib/server-auth';
 import ScrollTopOnMount from '@/components/ScrollTopOnMount';
+
+// 强制动态渲染，避免构建时的cookie访问错误
+export const dynamic = 'force-dynamic'
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -28,30 +31,22 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     displayName: string;
     avatarUrl: string;
   } | null = null;
-  
+
   try {
-    const supabase = createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    const user = await getServerUserInfo();
+
     if (user) {
-      // 获取 user_profiles 中的头像和显示名
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('avatar_url, display_name, username')
-        .eq('id', user.id)
-        .single();
-      
       initialUser = {
         email: user.email || '',
-        displayName: profile?.display_name || profile?.username || user.email?.split('@')[0] || '',
-        avatarUrl: profile?.avatar_url || '',
+        displayName: user.nickname || user.username || '',
+        avatarUrl: user.avatar || '',
       };
     }
   } catch (error) {
     // 忽略错误，使用 null 作为默认值
     console.error('Error fetching user in layout:', error);
   }
-  
+
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className={`${inter.className} scroll-smooth`}>

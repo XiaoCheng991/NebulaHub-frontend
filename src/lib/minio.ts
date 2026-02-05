@@ -68,9 +68,7 @@ async function ensureBucketExists(): Promise<void> {
 
     if (!exists) {
       console.log(`桶不存在，正在创建桶 "${minioConfig.bucket}"...`)
-      await client.makeBucket(minioConfig.bucket, {
-        ObjectLocking: false,
-      })
+      await client.makeBucket(minioConfig.bucket, 'us-east-1')
       console.log(`MinIO bucket "${minioConfig.bucket}" 创建成功`)
 
       // 设置桶为公开读取
@@ -120,9 +118,13 @@ export async function uploadFile(
 
     // 上传文件
     console.log('正在上传文件...')
-    await client.putObject(minioConfig.bucket, objectName, buffer, {
-      'Content-Type': contentType,
-    })
+    await client.putObject(
+      minioConfig.bucket,
+      objectName,
+      buffer,
+      buffer.length,
+      { 'Content-Type': contentType }
+    )
     console.log('文件上传成功:', objectName)
 
     // 返回公开URL

@@ -1,25 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+// 通用类型定义
 
-// 获取 Supabase 配置
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-// 创建 Supabase 客户端
-// 使用可选链和默认值来确保客户端始终可创建
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-    detectSessionInUrl: false,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
-    },
-  },
-});
-
-// 数据库类型定义
 export type Message = {
   id: string;
   content: string;
@@ -77,5 +57,3 @@ export const getAvatarColor = (name: string): string => {
   const index = name.charCodeAt(0) % colors.length;
   return colors[index];
 };
-
-export default supabase;

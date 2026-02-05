@@ -2,9 +2,9 @@
 
 import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
-import { supabase } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { logout } from "@/lib/client-auth"
 
 export function LogoutButton({ className, iconOnly }: { className?: string, iconOnly?: boolean }) {
   const router = useRouter()
@@ -13,20 +13,9 @@ export function LogoutButton({ className, iconOnly }: { className?: string, icon
   const handleLogout = async () => {
     setIsLoading(true)
     try {
-      // 客户端清除 session
-      await supabase.auth.signOut()
-      
-      // 调用服务端 API 清除 cookies
-      await fetch('/auth/signout', {
-        method: 'POST',
-      })
-      
-      // 清除本地存储
-      if (typeof window !== 'undefined') {
-        localStorage.clear()
-        sessionStorage.clear()
-      }
-      
+      // 调用 logout 函数清除本地存储和cookie
+      await logout()
+
       // 跳转到登录页
       router.push('/login')
       router.refresh()

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -8,26 +8,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
-import { supabase } from "@/lib/supabase/client"
-import { Mail, Lock, User, ArrowRight, Check } from "lucide-react"
+import { register } from "@/lib/client-auth"
+import { Mail, Lock, User, ArrowRight, Check, Github } from "lucide-react"
 
 export default function RegisterPage() {
-  const [name, setName] = useState("")
+  const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        router.replace("/dashboard")
-      } else {
-        setLoading(false)
-      }
-    })
-  }, [router])
 
   const handleEmailRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,41 +40,38 @@ export default function RegisterPage() {
       return
     }
 
+    if (username.length < 3) {
+      toast({
+        title: "用户名太短",
+        description: "用户名至少需要3个字符",
+        variant: "destructive",
+      })
+      return
+    }
+
     setLoading(true)
 
     try {
-      const { error } = await supabase.auth.signUp({
+      await register({
+        username,
         email,
         password,
-        options: {
-          data: {
-            username: name || email.split("@")[0],
-            display_name: name || email.split("@")[0],
-          },
-          emailRedirectTo: `${location.origin}/auth/callback`,
-        },
+        nickname: username,
       })
-
-      if (error) {
-        toast({
-          title: "注册失败",
-          description: error.message,
-          variant: "destructive",
-        })
-        return
-      }
 
       toast({
         title: "注册成功",
-        description: "请检查你的邮箱，点击验证链接完成注册",
+        description: "欢迎加入NebulaHub！正在跳转...",
       })
 
-      router.push("/login")
-      router.refresh()
-    } catch (error) {
+      setTimeout(() => {
+        router.push("/dashboard")
+      }, 500)
+
+    } catch (error: any) {
       toast({
-        title: "错误",
-        description: "发生未知错误，请重试",
+        title: "注册失败",
+        description: error.message || "注册失败，请重试",
         variant: "destructive",
       })
     } finally {
@@ -92,44 +79,64 @@ export default function RegisterPage() {
     }
   }
 
+  const handleGithubLogin = () => {
+    // 跳转到GitHub OAuth授权页面
+    const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || "Ov23lisH1zy6aIiT5f9r"
+    const redirectUri = `${window.location.origin}/auth/github/callback`
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=user:email`
+    window.location.href = githubAuthUrl
+  }
+
   const passwordRequirements = [
     { met: password.length >= 6, text: "至少6个字符" },
     { met: password === confirmPassword && password.length > 0, text: "两次密码一致" },
+    { met: username.length >= 3, text: "用户名至少3个字符" },
   ]
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">检查登录状态中...</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">创建账户</CardTitle>
-          <CardDescription>开始使用 NebulaHub 橙光</CardDescription>
+          <CardDescription>开始使用 NebulaHub</CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {/* GitHub登录按钮 */}
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={handleGithubLogin}
+            disabled={loading}
+          >
+            <Github className="h-4 w-4" />
+            GitHub 账号注册
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">或者使用邮箱</span>
+            </div>
+          </div>
+
           <form onSubmit={handleEmailRegister} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">昵称</Label>
+              <Label htmlFor="username">用户名</Label>
               <div className="relative">
                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="name"
+                  id="username"
                   type="text"
-                  placeholder="给自己起个名字"
+                  placeholder="用户名（3-50个字符）"
                   className="pl-10"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  minLength={3}
+                  maxLength={50}
                 />
               </div>
             </div>
@@ -157,11 +164,12 @@ export default function RegisterPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="设置密码"
+                  placeholder="设置密码（至少6个字符）"
                   className="pl-10"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  minLength={6}
                 />
               </div>
             </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Message } from '@/lib/supabase-chat';
+import { Message } from '@/lib/types';
 import { 
   Send, 
   X, 

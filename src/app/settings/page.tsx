@@ -6,32 +6,53 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { supabase } from "@/lib/supabase/client"
 import { toast } from "@/components/ui/use-toast"
-import { Upload, Github, Mail, User, Loader2 } from "lucide-react"
+import { Upload, User, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { AvatarCropDialog } from "@/components/ui/avatar-crop-dialog"
 import LayoutWithFullWidth from "@/components/LayoutWithFullWidth"
+import { getLocalUserInfo } from "@/lib/client-auth"
+import { uploadFile } from "@/lib/api-client"
+
+interface UserInfo {
+  id: number
+  username: string
+  email: string
+  nickname: string
+  avatar: string | null
+}
+
+interface UserProfile {
+  username: string
+  displayName: string
+  avatarUrl: string | null
+  bio: string
+}
 
 export default function SettingsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  
+
   // 裁剪相关状态
   const [showCropDialog, setShowCropDialog] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [originalFile, setOriginalFile] = useState<File | null>(null)
-  
-  const [userInfo, setUserInfo] = useState({
+
+  const [userInfo, setUserInfo] = useState<UserInfo>({
+    id: 0,
+    username: "",
     email: "",
+    nickname: "",
+    avatar: null,
+  })
+
+  const [profile, setProfile] = useState<UserProfile>({
     username: "",
     displayName: "",
-    avatarUrl: "",
+    avatarUrl: null,
     bio: "",
-    isGithubUser: false,
-    userId: "", // 用于验证
   })
 
   useEffect(() => {
@@ -40,39 +61,48 @@ export default function SettingsPage() {
 
   const fetchUserInfo = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
+      const localUser = getLocalUserInfo()
+      if (!localUser) {
         router.push('/login')
         return
       }
 
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
+      setUserInfo(localUser)
 
-      // 检查是否是 GitHub 用户（通过 identities 表）
-      const isGithubUser = user.app_metadata?.provider === 'github' || 
-                          user.identities?.some(identity => identity.provider === 'github')
-
-      setUserInfo({
-        email: user.email || "",
-        username: profile?.username || "",
-        displayName: profile?.display_name || "",
-        avatarUrl: profile?.avatar_url || "",
-        bio: profile?.bio || "",
-        isGithubUser: isGithubUser || false,
-        userId: user.id,
+      // 从后端获取完整的用户档案
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:8080/api/user/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.code === 200 && data.data) {
+          setProfile(data.data)
+        }
+      } else {
+        // 如果后端还没有用户档案API，使用本地数据
+        setProfile({
+          username: localUser.username,
+          displayName: localUser.nickname || "",
+          avatarUrl: localUser.avatar,
+          bio: "",
+        })
+      }
     } catch (error) {
       console.error('Error fetching user info:', error)
-      toast({
-        title: "加载失败",
-        description: "无法获取用户信息",
-        variant: "destructive",
-      })
+      // 如果API调用失败，使用本地用户信息
+      const localUser = getLocalUserInfo()
+      if (localUser) {
+        setProfile({
+          username: localUser.username,
+          displayName: localUser.nickname || "",
+          avatarUrl: localUser.avatar,
+          bio: "",
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -92,7 +122,7 @@ export default function SettingsPage() {
       return
     }
 
-    // 验证文件大小（5MB 原图，裁剪后会压缩）
+    // 验证文件大小（5MB）
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "文件过大",
@@ -107,7 +137,7 @@ export default function SettingsPage() {
     const imageUrl = URL.createObjectURL(file)
     setSelectedImage(imageUrl)
     setShowCropDialog(true)
-    
+
     // 清空 input
     e.target.value = ''
   }
@@ -117,11 +147,6 @@ export default function SettingsPage() {
     setShowCropDialog(false)
 
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-      if (userError) throw userError
-      if (!user) throw new Error('用户未登录')
-
       // 将Blob转换为File对象
       const file = new File([croppedImageBlob], originalFile?.name || 'avatar.jpg', {
         type: 'image/jpeg',
@@ -130,24 +155,14 @@ export default function SettingsPage() {
       // 创建FormData
       const formData = new FormData()
       formData.append('file', file)
-      if (userInfo.avatarUrl) {
-        formData.append('oldAvatarUrl', userInfo.avatarUrl)
-      }
 
-      // 调用MinIO上传API
-      const response = await fetch('/api/upload/avatar', {
-        method: 'POST',
-        body: formData,
-      })
+      // 调用后端上传API
+      const { url } = await uploadFile('/api/file/upload', file)
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || '上传失败')
-      }
-
-      const { url } = await response.json()
-
-      setUserInfo(prev => ({ ...prev, avatarUrl: url }))
+      // 更新本地状态
+      const newAvatarUrl = url
+      setProfile(prev => ({ ...prev, avatarUrl: newAvatarUrl }))
+      setUserInfo(prev => ({ ...prev, avatar: newAvatarUrl }))
 
       toast({
         title: "上传成功",
@@ -161,7 +176,6 @@ export default function SettingsPage() {
       })
     } finally {
       setUploading(false)
-      // 清理临时图片URL
       if (selectedImage) {
         URL.revokeObjectURL(selectedImage)
         setSelectedImage(null)
@@ -173,102 +187,50 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      // 数据验证
-      const errors: string[] = []
-
-      // 如果不是 GitHub 用户，验证邮箱、用户名
-      if (!userInfo.isGithubUser) {
-        // 邮箱验证
-        if (!userInfo.email || !userInfo.email.includes('@')) {
-          errors.push('请输入有效的邮箱地址')
-        }
-
-        // 用户名验证
-        if (!userInfo.username || userInfo.username.length < 3) {
-          errors.push('用户名至少 3 个字符')
-        }
-        
-        const usernameRegex = /^[a-zA-Z0-9_]+$/
-        if (!usernameRegex.test(userInfo.username)) {
-          errors.push('用户名只能包含字母、数字和下划线')
-        }
-
-        // 检查用户名唯一性
-        const { data: existingUsername } = await supabase
-          .from('user_profiles')
-          .select('id')
-          .eq('username', userInfo.username)
-          .neq('id', userInfo.userId)
-          .single()
-
-        if (existingUsername) {
-          errors.push('该用户名已被使用')
-        }
-      }
-
-      // 显示名验证
-      if (userInfo.displayName && userInfo.displayName.length > 100) {
-        errors.push('显示名不能超过 100 个字符')
-      }
-
-      if (errors.length > 0) {
-        toast({
-          title: "验证失败",
-          description: errors.join('\n'),
-          variant: "destructive",
-        })
-        setSaving(false)
-        return
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('未登录')
       }
 
       // 构建更新数据
-      const updateData: any = {
-        bio: userInfo.bio,
-        updated_at: new Date().toISOString(),
+      const updateData = {
+        username: profile.username,
+        nickname: profile.displayName,
+        bio: profile.bio,
+        avatar: profile.avatarUrl,
       }
 
-      // GitHub 用户可以修改显示名
-      if (userInfo.isGithubUser) {
-        updateData.display_name = userInfo.displayName
-      } else {
-        // 邮箱用户可以修改更多字段
-        updateData.username = userInfo.username
-        updateData.display_name = userInfo.displayName
+      const response = await fetch('http://localhost:8080/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || '保存失败')
       }
 
-      const { error } = await supabase
-        .from('user_profiles')
-        .update(updateData)
-        .eq('id', user.id)
-
-      if (error) throw error
-
-      // 如果是邮箱用户且修改了邮箱，更新 Supabase Auth
-      if (!userInfo.isGithubUser && userInfo.email !== user.email) {
-        const { error: emailError } = await supabase.auth.updateUser({
-          email: userInfo.email,
-        })
-        
-        if (emailError) {
-          toast({
-            title: "邮箱更新失败",
-            description: "信息已保存，但邮箱更新失败：" + emailError.message,
-            variant: "destructive",
-          })
-        } else {
-          toast({
-            title: "保存成功",
-            description: "信息已更新。请检查邮箱验证新地址。",
-          })
+      const data = await response.json()
+      if (data.code === 200) {
+        // 更新本地用户信息
+        const updatedUser = {
+          ...userInfo,
+          nickname: profile.displayName,
+          avatar: profile.avatarUrl,
         }
-      } else {
+        localStorage.setItem('userInfo', JSON.stringify(updatedUser))
+        setUserInfo(updatedUser)
+
         toast({
           title: "保存成功",
           description: "个人信息已更新",
         })
+      } else {
+        throw new Error(data.message || '保存失败')
       }
     } catch (error: any) {
       console.error('Error saving:', error)
@@ -310,17 +272,15 @@ export default function SettingsPage() {
               个人头像
             </CardTitle>
             <CardDescription>
-              {userInfo.isGithubUser 
-                ? "使用 GitHub 登录，头像来自 GitHub" 
-                : "上传你的个人头像，让朋友更容易认出你"}
+              上传你的个人头像，让朋友更容易认出你
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-6">
               <div className="relative">
-                {userInfo.avatarUrl ? (
+                {profile.avatarUrl ? (
                   <img
-                    src={userInfo.avatarUrl}
+                    src={profile.avatarUrl}
                     alt="Avatar"
                     className="w-24 h-24 rounded-2xl object-cover shadow-lg ring-4 ring-blue-500/10"
                   />
@@ -329,11 +289,8 @@ export default function SettingsPage() {
                     <User className="h-12 w-12 text-blue-500" />
                   </div>
                 )}
-                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-br from-green-400 to-green-500 rounded-full border-2 border-white flex items-center justify-center shadow-md">
-                  <span className="text-white text-xs">✓</span>
-                </div>
               </div>
-              
+
               <div className="flex-1">
                 <Label htmlFor="avatar-upload" className="cursor-pointer">
                   <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/25">
@@ -378,67 +335,48 @@ export default function SettingsPage() {
               基本信息
             </CardTitle>
             <CardDescription>
-              {userInfo.isGithubUser 
-                ? "这些信息来自你的 GitHub 账号" 
-                : "你的账号基本信息"}
+              你的账号基本信息
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* 邮箱 */}
               <div className="space-y-2">
-                <Label htmlFor="email" className="flex items-center gap-2 text-slate-600">
-                  <Mail className="h-4 w-4 text-slate-400" />
-                  电子邮箱
-                </Label>
+                <Label htmlFor="email" className="text-slate-600">电子邮箱</Label>
                 <Input
                   id="email"
                   value={userInfo.email}
-                  onChange={(e) => setUserInfo(prev => ({ ...prev, email: e.target.value }))}
-                  disabled={userInfo.isGithubUser}
-                  className={userInfo.isGithubUser ? "bg-slate-50" : ""}
+                  disabled
+                  className="bg-slate-50"
                 />
-                <p className="text-xs text-slate-400">
-                  {userInfo.isGithubUser 
-                    ? "来自 GitHub" 
-                    : "修改后需验证"}
-                </p>
+                <p className="text-xs text-slate-400">邮箱不可修改</p>
               </div>
 
               {/* 用户名 */}
               <div className="space-y-2">
-                <Label htmlFor="username" className="flex items-center gap-2 text-slate-600">
-                  {userInfo.isGithubUser && <Github className="h-4 w-4 text-slate-400" />}
-                  用户名
-                </Label>
+                <Label htmlFor="username" className="text-slate-600">用户名</Label>
                 <Input
                   id="username"
-                  value={userInfo.username}
-                  onChange={(e) => setUserInfo(prev => ({ ...prev, username: e.target.value }))}
-                  disabled={userInfo.isGithubUser}
-                  className={userInfo.isGithubUser ? "bg-slate-50" : ""}
+                  value={profile.username}
+                  disabled
+                  className="bg-slate-50"
                 />
-                <p className="text-xs text-slate-400">
-                  {userInfo.isGithubUser
-                    ? "来自 GitHub"
-                    : "字母、数字、下划线"}
-                </p>
+                <p className="text-xs text-slate-400">用户名唯一且不可修改</p>
               </div>
 
               {/* 显示名称 */}
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="displayName" className="text-slate-600">显示名称</Label>
+                <Label htmlFor="displayName">显示名称</Label>
                 <Input
                   id="displayName"
-                  value={userInfo.displayName}
-                  onChange={(e) => setUserInfo(prev => ({ ...prev, displayName: e.target.value }))}
+                  value={profile.displayName}
+                  onChange={(e) => setProfile(prev => ({ ...prev, displayName: e.target.value }))}
                   placeholder="输入显示名称"
                   maxLength={100}
-                  className="focus:border-cyan-400 focus:ring-cyan-400/20"
                 />
                 <div className="flex justify-end">
                   <span className="text-xs text-slate-400">
-                    {userInfo.displayName.length}/100
+                    {profile.displayName?.length || 0}/100
                   </span>
                 </div>
               </div>
@@ -462,23 +400,23 @@ export default function SettingsPage() {
               <Label htmlFor="bio" className="text-slate-600">简介内容</Label>
               <Textarea
                 id="bio"
-                value={userInfo.bio}
-                onChange={(e) => setUserInfo(prev => ({ ...prev, bio: e.target.value }))}
+                value={profile.bio}
+                onChange={(e) => setProfile(prev => ({ ...prev, bio: e.target.value }))}
                 placeholder="写点什么介绍自己..."
                 rows={3}
                 maxLength={500}
-                className="resize-none focus:border-purple-400 focus:ring-purple-400/20"
+                className="resize-none"
               />
               <div className="flex justify-end">
-                <span className={`text-xs ${userInfo.bio.length >= 500 ? 'text-red-500' : 'text-slate-400'}`}>
-                  {userInfo.bio.length} / 500
+                <span className={`text-xs ${(profile.bio?.length || 0) >= 500 ? 'text-red-500' : 'text-slate-400'}`}>
+                  {profile.bio?.length || 0} / 500
                 </span>
               </div>
             </div>
 
             <div className="flex justify-end pt-2">
-              <Button 
-                onClick={handleSave} 
+              <Button
+                onClick={handleSave}
                 disabled={saving}
                 className="gap-2 px-6 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25"
               >
@@ -497,64 +435,17 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* 账号信息提示 */}
-        {userInfo.isGithubUser ? (
-          <Card className="border-0 shadow-lg shadow-blue-500/5">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Github className="h-5 w-5" />
-                GitHub 账号
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-900/50">
-                <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                  <Github className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300">
-                    你正在使用 <strong>GitHub 账号</strong>登录。用户名和邮箱与你的 GitHub 账号保持同步。
-                    你可以自定义<strong>显示名称</strong>、<strong>头像</strong>和<strong>个人简介</strong>，这不会影响账号一致性。
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="border-0 shadow-lg shadow-green-500/5">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Mail className="h-5 w-5" />
-                邮箱账号
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-green-50 dark:bg-green-900/20">
-                <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center flex-shrink-0">
-                  <Mail className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300">
-                    你正在使用<strong>邮箱账号</strong>登录。你可以修改用户名、邮箱、显示名称、头像和个人简介。
-                    你的账号唯一标识基于 UUID，修改信息不会影响账号一致性。
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 头像裁剪对话框 */}
-        {selectedImage && (
-          <AvatarCropDialog
-            open={showCropDialog}
-            onOpenChange={setShowCropDialog}
-            imageSrc={selectedImage}
-            onCropComplete={handleCropComplete}
-          />
-        )}
       </div>
+
+      {/* 头像裁剪对话框 */}
+      {selectedImage && (
+        <AvatarCropDialog
+          open={showCropDialog}
+          onOpenChange={setShowCropDialog}
+          imageSrc={selectedImage}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </LayoutWithFullWidth>
   )
 }

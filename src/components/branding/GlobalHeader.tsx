@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+import { getLocalUserInfo } from '@/lib/client-auth';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { MessageCircle, Settings, Sparkles, FolderUp } from 'lucide-react';
 
@@ -20,6 +20,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
 }) => {
   const [src, setSrc] = React.useState<string>('/logo_icon.svg');
   const [user, setUser] = React.useState<{ email?: string; displayName?: string; avatarUrl?: string } | null>(initialUser);
+  const initializedRef = React.useRef(false);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -30,51 +31,46 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
   };
 
   React.useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        const u = data?.user;
-        if (u && (u as any).email) {
-          const email: string | undefined = (u as any).email;
-          const displayName = email?.split('@')[0] ?? (u as any).user_metadata?.full_name ?? '';
-          
-          // 获取 user_profiles 中的头像
-          const { data: profile } = await supabase
-            .from('user_profiles')
-            .select('avatar_url, display_name, username')
-            .eq('id', u.id)
-            .single();
-          
-          setUser({ 
-            email, 
-            displayName: profile?.display_name || profile?.username || displayName,
-            avatarUrl: profile?.avatar_url 
-          });
-        } else {
-          setUser(null);
-        }
-      } catch {
-        setUser(null);
-      }
-    };
-    
-    // 如果没有初始用户数据，才去获取
-    if (!initialUser) {
-      fetchUser();
+    // 只执行一次初始化
+    if (initializedRef.current) {
+      return;
     }
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
+    initializedRef.current = true;
+
+    // 如果没有初始用户数据，从本地存储获取
+    if (!initialUser) {
+      const localUser = getLocalUserInfo();
+      if (localUser) {
+        setUser({
+          email: localUser.email,
+          displayName: localUser.nickname || localUser.username,
+          avatarUrl: localUser.avatar || undefined,
+        });
       } else {
-        fetchUser();
+        setUser(null);
       }
-    });
-    
-    return () => {
-      subscription?.unsubscribe?.();
+    }
+
+    // 监听存储变化（用于检测登出）
+    const handleStorageChange = () => {
+      const localUser = getLocalUserInfo();
+      if (localUser) {
+        setUser({
+          email: localUser.email,
+          displayName: localUser.nickname || localUser.username,
+          avatarUrl: localUser.avatar || undefined,
+        });
+      } else {
+        setUser(null);
+      }
     };
-  }, [initialUser]);
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <header className={`w-full sticky top-0 z-50 bg-white/80 dark:bg-gray-900/60 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-sm ${className}`} aria-label="站点头部">

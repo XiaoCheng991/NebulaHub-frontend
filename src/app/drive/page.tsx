@@ -1,36 +1,51 @@
+"use client"
+
+import React, { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { 
-  Folder, 
-  File, 
-  Image, 
-  FileText, 
-  Music, 
-  Video, 
-  Download, 
-  Upload, 
-  MoreHorizontal, 
+import { getLocalUserInfo } from "@/lib/client-auth"
+import {
+  Folder,
+  File,
+  Image,
+  FileText,
+  Music,
+  Video,
+  Download,
+  Upload,
+  MoreHorizontal,
   Search,
   Grid3X3,
-  List
+  List,
+  Loader2
 } from "lucide-react"
 import LayoutWithFullWidth from "@/components/LayoutWithFullWidth"
 
-export default async function DrivePage() {
-  const supabase = createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export default function DrivePage() {
+  const router = useRouter()
+  const [user, setUser] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
 
-  if (!user) {
-    // 如果用户未登录，重定向到登录页
+  useEffect(() => {
+    const currentUser = getLocalUserInfo()
+    if (!currentUser) {
+      router.push("/login")
+      return
+    }
+    setUser(currentUser)
+    setLoading(false)
+  }, [])
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>请先登录</p>
-      </div>
-    );
+      <LayoutWithFullWidth>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </LayoutWithFullWidth>
+    )
   }
 
   // Mock data for demonstration
@@ -39,14 +54,14 @@ export default async function DrivePage() {
     { id: "folder-2", name: "文档", size: "450 MB", modified: "2024-01-10", type: "folder" },
     { id: "folder-3", name: "音乐", size: "2.1 GB", modified: "2024-01-05", type: "folder" },
     { id: "folder-4", name: "工作资料", size: "870 MB", modified: "2024-01-12", type: "folder" },
-  ];
+  ]
 
   const files = [
     { id: "file-1", name: "年度报告.pdf", size: "2.4 MB", modified: "2024-01-14", type: "pdf", owner: "我" },
     { id: "file-2", name: "假期照片.zip", size: "15.7 MB", modified: "2024-01-13", type: "zip", owner: "Luna" },
     { id: "file-3", name: "项目计划.docx", size: "1.1 MB", modified: "2024-01-12", type: "docx", owner: "我" },
     { id: "file-4", name: "会议录音.mp3", size: "8.3 MB", modified: "2024-01-11", type: "mp3", owner: "张三" },
-  ];
+  ]
 
   return (
     <LayoutWithFullWidth>
@@ -107,8 +122,8 @@ export default async function DrivePage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {folders.map((folder) => (
-                    <div 
-                      key={folder.id} 
+                    <div
+                      key={folder.id}
                       className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 cursor-pointer transition-all group"
                     >
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -166,8 +181,8 @@ export default async function DrivePage() {
                     }
 
                     return (
-                      <div 
-                        key={file.id} 
+                      <div
+                        key={file.id}
                         className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 cursor-pointer transition-all group"
                       >
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorClass}`}>
