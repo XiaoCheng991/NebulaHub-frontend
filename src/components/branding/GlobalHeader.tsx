@@ -3,7 +3,8 @@ import React from 'react';
 import Link from 'next/link';
 import { getLocalUserInfo } from '@/lib/client-auth';
 import { UserAvatar } from '@/components/ui/user-avatar';
-import { MessageCircle, Settings, Sparkles, FolderUp } from 'lucide-react';
+import { LogoutButton } from '@/components/auth/LogoutButton';
+import { MessageCircle, Settings, Sparkles, FolderUp, LogOut } from 'lucide-react';
 
 type GlobalHeaderProps = {
   className?: string;
@@ -19,8 +20,18 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
   initialUser = null,
 }) => {
   const [src, setSrc] = React.useState<string>('/logo_icon.svg');
-  const [user, setUser] = React.useState<{ email?: string; displayName?: string; avatarUrl?: string } | null>(initialUser);
-  const initializedRef = React.useRef(false);
+  const [user, setUser] = React.useState<{ email?: string; displayName?: string; avatarUrl?: string } | null>(() => {
+    // 初始化时优先从 localStorage 读取最新状态
+    const localUser = getLocalUserInfo();
+    if (localUser) {
+      return {
+        email: localUser.email,
+        displayName: localUser.nickname || localUser.username,
+        avatarUrl: localUser.avatar || undefined,
+      };
+    }
+    return initialUser;
+  });
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -30,50 +41,38 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
     }
   };
 
-  React.useEffect(() => {
-    // 只执行一次初始化
-    if (initializedRef.current) {
-      return;
+  // 更新用户状态的函数
+  const updateAuthState = React.useCallback(() => {
+    const localUser = getLocalUserInfo();
+    if (localUser) {
+      setUser({
+        email: localUser.email,
+        displayName: localUser.nickname || localUser.username,
+        avatarUrl: localUser.avatar || undefined,
+      });
+    } else {
+      setUser(null);
     }
-    initializedRef.current = true;
-
-    // 如果没有初始用户数据，从本地存储获取
-    if (!initialUser) {
-      const localUser = getLocalUserInfo();
-      if (localUser) {
-        setUser({
-          email: localUser.email,
-          displayName: localUser.nickname || localUser.username,
-          avatarUrl: localUser.avatar || undefined,
-        });
-      } else {
-        setUser(null);
-      }
-    }
-
-    // 监听存储变化（用于检测登出）
-    const handleStorageChange = () => {
-      const localUser = getLocalUserInfo();
-      if (localUser) {
-        setUser({
-          email: localUser.email,
-          displayName: localUser.nickname || localUser.username,
-          avatarUrl: localUser.avatar || undefined,
-        });
-      } else {
-        setUser(null);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  React.useEffect(() => {
+    // 组件挂载时立即更新一次状态
+    updateAuthState();
+
+    // 监听存储变化（用于检测登出）
+    window.addEventListener('storage', updateAuthState);
+
+    // 监听认证变化事件（用于同标签页内的登录/退出）
+    window.addEventListener('auth-change', updateAuthState);
+
+    return () => {
+      window.removeEventListener('storage', updateAuthState);
+      window.removeEventListener('auth-change', updateAuthState);
+    };
+  }, [updateAuthState]);
+
   return (
-    <header className={`w-full sticky top-0 z-50 bg-white/80 dark:bg-gray-900/60 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-sm ${className}`} aria-label="站点头部">
+    <header className={`w-full sticky top-0 z-50 bg-transparent backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 ${className}`} aria-label="站点头部">
       <div className="container mx-auto px-6 py-3 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3">
           <img src={src} alt="NebulaHub Logo" style={{ height: 40, width: 'auto' }} onError={handleError} className="rounded-xl" />
@@ -122,17 +121,20 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
         
         <div className="flex items-center gap-2">
           {user ? (
-            <Link href="/dashboard/settings" className="flex items-center gap-2.5 p-2 rounded-xl bg-transparent hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden sm:block">
-                Hi {user.displayName || (user.email?.split('@')[0] ?? '')}!
-              </span>
-              <UserAvatar
-                avatarUrl={user.avatarUrl}
-                displayName={user.displayName}
-                email={user.email}
-                size="sm"
-              />
-            </Link>
+            <>
+              <Link href="/dashboard/settings" className="flex items-center gap-2.5 p-2 rounded-xl bg-transparent hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden sm:block">
+                  Hi {user.displayName || (user.email?.split('@')[0] ?? '')}!
+                </span>
+                <UserAvatar
+                  avatarUrl={user.avatarUrl}
+                  displayName={user.displayName}
+                  email={user.email}
+                  size="sm"
+                />
+              </Link>
+              <LogoutButton iconOnly />
+            </>
           ) : (
             <>
               <Link

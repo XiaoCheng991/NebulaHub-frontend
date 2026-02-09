@@ -50,9 +50,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className={`${inter.className} scroll-smooth`}>
-        <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 overflow-hidden">
+        <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
           <GlobalHeader initialUser={initialUser} />
-          <main className="flex-1 w-full overflow-y-auto pt-4">
+          <main className="flex-1 w-full">
             {children}
           </main>
         </div>

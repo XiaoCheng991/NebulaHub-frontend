@@ -53,8 +53,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4 -mt-16">
+      <div className="w-full max-w-md">
+        <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">欢迎回来</CardTitle>
           <CardDescription>登录你的账户，继续使用 NebulaHub</CardDescription>
@@ -132,6 +133,7 @@ export default function LoginPage() {
           </p>
         </CardFooter>
       </Card>
+      </div>
     </div>
   )
 }

@@ -99,6 +99,9 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
     // 保存用户信息
     localStorage.setItem('userInfo', JSON.stringify(userInfo))
 
+    // 触发自定义事件，通知 GlobalHeader 更新状态
+    window.dispatchEvent(new Event('auth-change'))
+
     return response.data
   }
 
@@ -122,6 +125,9 @@ export async function register(data: RegisterRequest): Promise<LoginResponse> {
     // 保存用户信息
     localStorage.setItem('userInfo', JSON.stringify(userInfo))
 
+    // 触发自定义事件，通知 GlobalHeader 更新状态
+    window.dispatchEvent(new Event('auth-change'))
+
     return response.data
   }
 
@@ -143,6 +149,9 @@ export async function logout(): Promise<void> {
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('userInfo')
     document.cookie = 'token=; path=/; max-age=0'
+
+    // 触发自定义事件，通知 GlobalHeader 更新状态
+    window.dispatchEvent(new Event('auth-change'))
   }
 }
 

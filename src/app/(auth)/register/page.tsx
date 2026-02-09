@@ -94,8 +94,9 @@ export default function RegisterPage() {
   ]
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4 -mt-16">
+      <div className="w-full max-w-md">
+        <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">创建账户</CardTitle>
           <CardDescription>开始使用 NebulaHub</CardDescription>
@@ -223,6 +224,7 @@ export default function RegisterPage() {
           </p>
         </CardFooter>
       </Card>
+      </div>
     </div>
   )
 }
