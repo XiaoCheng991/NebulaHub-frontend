@@ -10,17 +10,10 @@ import { toast } from "@/components/ui/use-toast"
 import { Upload, User, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { AvatarCropDialog } from "@/components/ui/avatar-crop-dialog"
+import { UserAvatar } from "@/components/ui/user-avatar"
 import LayoutWithFullWidth from "@/components/LayoutWithFullWidth"
-import { getLocalUserInfo } from "@/lib/client-auth"
-import { uploadFile } from "@/lib/api-client"
-
-interface UserInfo {
-  id: number
-  username: string
-  email: string
-  nickname: string
-  avatar: string | null
-}
+import { useUser } from "@/lib/user-context"
+import { uploadFile, put } from "@/lib/api-client"
 
 interface UserProfile {
   username: string
@@ -31,7 +24,7 @@ interface UserProfile {
 
 export default function SettingsPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const { user, loading, refreshUser, updateUser } = useUser()
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
 
@@ -39,14 +32,6 @@ export default function SettingsPage() {
   const [showCropDialog, setShowCropDialog] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [originalFile, setOriginalFile] = useState<File | null>(null)
-
-  const [userInfo, setUserInfo] = useState<UserInfo>({
-    id: 0,
-    username: "",
-    email: "",
-    nickname: "",
-    avatar: null,
-  })
 
   const [profile, setProfile] = useState<UserProfile>({
     username: "",
@@ -56,57 +41,15 @@ export default function SettingsPage() {
   })
 
   useEffect(() => {
-    fetchUserInfo()
-  }, [])
-
-  const fetchUserInfo = async () => {
-    try {
-      const localUser = getLocalUserInfo()
-      if (!localUser) {
-        router.push('/login')
-        return
-      }
-
-      setUserInfo(localUser)
-
-      // 从后端获取完整的用户档案
-      const token = localStorage.getItem('token')
-      const response = await fetch('http://localhost:8080/api/user/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+    if (user) {
+      setProfile({
+        username: user.username,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
       })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.code === 200 && data.data) {
-          setProfile(data.data)
-        }
-      } else {
-        // 如果后端还没有用户档案API，使用本地数据
-        setProfile({
-          username: localUser.username,
-          displayName: localUser.nickname || "",
-          avatarUrl: localUser.avatar,
-          bio: "",
-        })
-      }
-    } catch (error) {
-      console.error('Error fetching user info:', error)
-      // 如果API调用失败，使用本地用户信息
-      const localUser = getLocalUserInfo()
-      if (localUser) {
-        setProfile({
-          username: localUser.username,
-          displayName: localUser.nickname || "",
-          avatarUrl: localUser.avatar,
-          bio: "",
-        })
-      }
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [user])
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -122,11 +65,11 @@ export default function SettingsPage() {
       return
     }
 
-    // 验证文件大小（5MB）
-    if (file.size > 5 * 1024 * 1024) {
+    // 验证文件大小（10MB）
+    if (file.size > 10 * 1024 * 1024) {
       toast({
         title: "文件过大",
-        description: "图片大小不能超过 5MB",
+        description: "图片大小不能超过 10MB",
         variant: "destructive",
       })
       return
@@ -152,23 +95,32 @@ export default function SettingsPage() {
         type: 'image/jpeg',
       })
 
-      // 创建FormData
-      const formData = new FormData()
-      formData.append('file', file)
+      // 调用后端上传API到MinIO
+      const uploadResult = await uploadFile('/api/file/upload', file)
 
-      // 调用后端上传API
-      const { url } = await uploadFile('/api/file/upload', file)
+      // 调用API保存头像信息到数据库（使用统一的 put 方法，支持 token 刷新）
+      await put('/api/user/profile/avatar', {
+        avatarName: uploadResult.fileName,
+        avatarUrl: uploadResult.url,
+        avatarSize: file.size,
+      })
 
       // 更新本地状态
-      const newAvatarUrl = url
+      const newAvatarUrl = uploadResult.url
       setProfile(prev => ({ ...prev, avatarUrl: newAvatarUrl }))
-      setUserInfo(prev => ({ ...prev, avatar: newAvatarUrl }))
+
+      // 更新全局用户状态
+      updateUser({ avatarUrl: newAvatarUrl })
+
+      // 刷新服务器数据（同步到 localStorage）
+      await refreshUser()
 
       toast({
         title: "上传成功",
         description: "头像已更新",
       })
     } catch (error: any) {
+      console.error('Avatar upload error:', error)
       toast({
         title: "上传失败",
         description: error.message || "无法上传头像",
@@ -187,51 +139,27 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        throw new Error('未登录')
-      }
-
-      // 构建更新数据
-      const updateData = {
+      // 调用API保存用户档案
+      await put('/api/user/profile', {
         username: profile.username,
         nickname: profile.displayName,
         bio: profile.bio,
         avatar: profile.avatarUrl,
-      }
-
-      const response = await fetch('http://localhost:8080/api/user/profile', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || '保存失败')
-      }
+      // 更新全局用户状态
+      updateUser({
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+      })
 
-      const data = await response.json()
-      if (data.code === 200) {
-        // 更新本地用户信息
-        const updatedUser = {
-          ...userInfo,
-          nickname: profile.displayName,
-          avatar: profile.avatarUrl,
-        }
-        localStorage.setItem('userInfo', JSON.stringify(updatedUser))
-        setUserInfo(updatedUser)
+      // 刷新服务器数据
+      await refreshUser()
 
-        toast({
-          title: "保存成功",
-          description: "个人信息已更新",
-        })
-      } else {
-        throw new Error(data.message || '保存失败')
-      }
+      toast({
+        title: "保存成功",
+        description: "个人信息已更新",
+      })
     } catch (error: any) {
       console.error('Error saving:', error)
       toast({
@@ -278,17 +206,13 @@ export default function SettingsPage() {
           <CardContent>
             <div className="flex items-center gap-6">
               <div className="relative">
-                {profile.avatarUrl ? (
-                  <img
-                    src={profile.avatarUrl}
-                    alt="Avatar"
-                    className="w-24 h-24 rounded-2xl object-cover shadow-lg ring-4 ring-blue-500/10"
-                  />
-                ) : (
-                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center shadow-lg ring-4 ring-blue-500/10">
-                    <User className="h-12 w-12 text-blue-500" />
-                  </div>
-                )}
+                <UserAvatar
+                  avatarUrl={profile.avatarUrl}
+                  displayName={profile.displayName}
+                  username={profile.username}
+                  size="lg"
+                  className="w-24 h-24 shadow-lg ring-4 ring-blue-500/10"
+                />
               </div>
 
               <div className="flex-1">
@@ -320,7 +244,7 @@ export default function SettingsPage() {
                     <span className="w-2 h-2 bg-green-500 rounded-full"></span>
                     支持 JPG, PNG, GIF
                   </span>
-                  <span>最大 5MB</span>
+                  <span>最大 10MB</span>
                 </div>
               </div>
             </div>
@@ -340,18 +264,6 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* 邮箱 */}
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-slate-600">电子邮箱</Label>
-                <Input
-                  id="email"
-                  value={userInfo.email}
-                  disabled
-                  className="bg-slate-50"
-                />
-                <p className="text-xs text-slate-400">邮箱不可修改</p>
-              </div>
-
               {/* 用户名 */}
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-slate-600">用户名</Label>

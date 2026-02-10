@@ -1,37 +1,20 @@
 "use client";
 import React from 'react';
 import Link from 'next/link';
-import { getLocalUserInfo } from '@/lib/client-auth';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { LogoutButton } from '@/components/auth/LogoutButton';
-import { MessageCircle, Settings, Sparkles, FolderUp, LogOut } from 'lucide-react';
+import { useUser } from '@/lib/user-context';
+import { MessageCircle, Settings, Sparkles, FolderUp, LogOut, Loader2 } from 'lucide-react';
 
 type GlobalHeaderProps = {
   className?: string;
-  initialUser?: {
-    email?: string;
-    displayName?: string;
-    avatarUrl?: string;
-  } | null;
 };
 
 const GlobalHeader: React.FC<GlobalHeaderProps> = ({
   className = '',
-  initialUser = null,
 }) => {
+  const { user, loading } = useUser()
   const [src, setSrc] = React.useState<string>('/logo_icon.svg');
-  const [user, setUser] = React.useState<{ email?: string; displayName?: string; avatarUrl?: string } | null>(() => {
-    // 初始化时优先从 localStorage 读取最新状态
-    const localUser = getLocalUserInfo();
-    if (localUser) {
-      return {
-        email: localUser.email,
-        displayName: localUser.nickname || localUser.username,
-        avatarUrl: localUser.avatar || undefined,
-      };
-    }
-    return initialUser;
-  });
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -40,36 +23,6 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
       setSrc('/public/logo_icon.svg');
     }
   };
-
-  // 更新用户状态的函数
-  const updateAuthState = React.useCallback(() => {
-    const localUser = getLocalUserInfo();
-    if (localUser) {
-      setUser({
-        email: localUser.email,
-        displayName: localUser.nickname || localUser.username,
-        avatarUrl: localUser.avatar || undefined,
-      });
-    } else {
-      setUser(null);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    // 组件挂载时立即更新一次状态
-    updateAuthState();
-
-    // 监听存储变化（用于检测登出）
-    window.addEventListener('storage', updateAuthState);
-
-    // 监听认证变化事件（用于同标签页内的登录/退出）
-    window.addEventListener('auth-change', updateAuthState);
-
-    return () => {
-      window.removeEventListener('storage', updateAuthState);
-      window.removeEventListener('auth-change', updateAuthState);
-    };
-  }, [updateAuthState]);
 
   return (
     <header className={`w-full sticky top-0 z-50 bg-transparent backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 ${className}`} aria-label="站点头部">
@@ -120,16 +73,19 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
         </nav>
         
         <div className="flex items-center gap-2">
-          {user ? (
+          {loading ? (
+            <div className="flex items-center gap-2 px-3">
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+            </div>
+          ) : user ? (
             <>
               <Link href="/dashboard/settings" className="flex items-center gap-2.5 p-2 rounded-xl bg-transparent hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden sm:block">
-                  Hi {user.displayName || (user.email?.split('@')[0] ?? '')}!
+                  Hi {user.displayName || user.username}!
                 </span>
                 <UserAvatar
                   avatarUrl={user.avatarUrl}
                   displayName={user.displayName}
-                  email={user.email}
                   size="sm"
                 />
               </Link>

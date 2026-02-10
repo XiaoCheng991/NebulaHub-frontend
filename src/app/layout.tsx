@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import GlobalHeader from '@/components/branding/GlobalHeader';
 import { Toaster } from "@/components/ui/toaster";
-import { getServerUserInfo } from '@/lib/server-auth';
+import { UserProvider } from '@/lib/user-context';
 import ScrollTopOnMount from '@/components/ScrollTopOnMount';
 
 // 强制动态渲染，避免构建时的cookie访问错误
@@ -24,40 +24,20 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  // 在服务端获取用户信息，传给 GlobalHeader
-  let initialUser: {
-    email: string;
-    displayName: string;
-    avatarUrl: string;
-  } | null = null;
-
-  try {
-    const user = await getServerUserInfo();
-
-    if (user) {
-      initialUser = {
-        email: user.email || '',
-        displayName: user.nickname || user.username || '',
-        avatarUrl: user.avatar || '',
-      };
-    }
-  } catch (error) {
-    // 忽略错误，使用 null 作为默认值
-    console.error('Error fetching user in layout:', error);
-  }
-
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className={`${inter.className} scroll-smooth`}>
-        <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
-          <GlobalHeader initialUser={initialUser} />
-          <main className="flex-1 w-full">
-            {children}
-          </main>
-        </div>
-        <ScrollTopOnMount />
-        <Toaster />
+        <UserProvider>
+          <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+            <GlobalHeader />
+            <main className="flex-1 w-full">
+              {children}
+            </main>
+          </div>
+          <ScrollTopOnMount />
+          <Toaster />
+        </UserProvider>
       </body>
     </html>
   );
