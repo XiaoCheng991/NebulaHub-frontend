@@ -1,7 +1,8 @@
 "use client"
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { getLocalUserInfo } from './client-auth'
+import { getUserProfile, getLocalUserInfo, setupTokenRefresh, refreshTokenApi } from '@/lib/api'
+import { isAuthenticated } from '@/lib/auth/token-manager'
 import { useRouter } from 'next/navigation'
 
 interface UserProfile {
@@ -28,50 +29,46 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
+  // 初始化 Token 刷新函数
+  useEffect(() => {
+    setupTokenRefresh(async () => {
+      const refreshToken = localStorage.getItem('refreshToken')
+      if (!refreshToken) {
+        throw new Error('No refresh token available')
+      }
+      return refreshTokenApi(refreshToken)
+    })
+  }, [])
+
   // 从服务器获取最新的用户信息
   const refreshUser = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const token = localStorage.getItem('token')
-      if (!token) {
+      if (!isAuthenticated()) {
         setUser(null)
         setLoading(false)
         return
       }
 
-      const response = await fetch('http://localhost:8080/api/user/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const data = await getUserProfile()
+      setUser({
+        username: data.username,
+        displayName: data.displayName,
+        avatarUrl: data.avatar,
+        bio: data.bio || '',
       })
 
-      if (!response.ok) {
-        throw new Error('获取用户信息失败')
-      }
-
-      const data = await response.json()
-      if (data.code === 200 && data.data) {
-        setUser({
-          username: data.data.username,
-          displayName: data.data.displayName,
-          avatarUrl: data.data.avatar,
-          bio: data.data.bio || '',
-        })
-
-        // 同步更新 localStorage
-        const localUser = getLocalUserInfo()
-        if (localUser) {
-          const updatedUser = {
-            ...localUser,
-            nickname: data.data.displayName,
-            avatar: data.data.avatar,
-          }
-          localStorage.setItem('userInfo', JSON.stringify(updatedUser))
+      // 同步更新 localStorage
+      const localUser = getLocalUserInfo()
+      if (localUser) {
+        const updatedUser = {
+          ...localUser,
+          nickname: data.displayName,
+          avatar: data.avatar,
         }
-      } else {
-        throw new Error(data.message || '获取用户信息失败')
+        localStorage.setItem('userInfo', JSON.stringify(updatedUser))
       }
     } catch (err: any) {
       console.error('Error fetching user info:', err)

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
 import { CheckCircle, XCircle } from "lucide-react"
+import { setTokens } from "@/lib/auth/token-manager"
 
 export default function GitHubCallbackPage() {
     const router = useRouter()
@@ -14,13 +15,17 @@ export default function GitHubCallbackPage() {
 
   useEffect(() => {
     const token = searchParams.get("token")
+    const refreshToken = searchParams.get("refreshToken")
 
     if (token) {
-      // 保存token
-      localStorage.setItem("token", token)
+      // 保存 token
+      setTokens({
+        accessToken: token,
+        refreshToken: refreshToken || '',
+      })
 
       // 获取用户信息
-      fetch("http://localhost:8080/api/auth/user-info", {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/auth/user-info`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -30,6 +35,9 @@ export default function GitHubCallbackPage() {
           if (data.code === 200 && data.data) {
             localStorage.setItem("userInfo", JSON.stringify(data.data))
             setStatus("success")
+
+            // 触发认证变化事件
+            window.dispatchEvent(new Event('auth-change'))
 
             toast({
               title: "登录成功",

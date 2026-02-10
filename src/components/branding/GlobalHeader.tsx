@@ -79,7 +79,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
             </div>
           ) : user ? (
             <>
-              <Link href="/dashboard/settings" className="flex items-center gap-2.5 p-2 rounded-xl bg-transparent hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200">
+              <Link href="/settings" className="flex items-center gap-2.5 p-2 rounded-xl bg-transparent hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden sm:block">
                   Hi {user.displayName || user.username}!
                 </span>
