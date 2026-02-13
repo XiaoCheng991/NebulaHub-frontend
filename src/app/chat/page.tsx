@@ -10,6 +10,7 @@ import Link from "next/link";
 import ChatLayout from "@/components/ChatLayout";
 import { formatTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { ProtectedRoute } from "@/components/auth/AuthGuard";
 
 interface User {
   id: string;
@@ -118,9 +119,10 @@ export default function ChatPage() {
   };
 
   return (
-    <ChatLayout>
-      {/*手动计算固定距离*/}
-      <div className="flex h-[calc(100vh-85px)] overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
+    <ProtectedRoute>
+      <ChatLayout>
+        {/*手动计算固定距离*/}
+        <div className="flex h-[calc(100vh-85px)] overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
         {/* Sidebar - Contact list */}
         <div className="h-full border-r bg-white flex flex-col shadow-sm pl-2">
           {/* Header */}
@@ -327,5 +329,6 @@ export default function ChatPage() {
         </div>
       </div>
     </ChatLayout>
+    </ProtectedRoute>
   );
 }

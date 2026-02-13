@@ -1,8 +1,8 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { getUserProfile, getLocalUserInfo, setupTokenRefresh, refreshTokenApi } from '@/lib/api'
-import { isAuthenticated } from '@/lib/auth/token-manager'
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
+import { getUserProfile, getLocalUserInfo, setupTokenRefresh, refreshTokenApi, startTokenRefreshTimer } from '@/lib/api'
+import { initTokenManager, isAuthenticated } from '@/lib/auth/dual-token-manager'
 import { useRouter } from 'next/navigation'
 
 interface UserProfile {
@@ -28,27 +28,47 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  // 用于跟踪是否有本地数据，避免不必要地显示 loading
+  const hasLocalDataRef = useRef(false)
 
-  // 初始化 Token 刷新函数
+  // 初始化 Token Manager 和 Token 刷新函数
   useEffect(() => {
-    setupTokenRefresh(async () => {
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (!refreshToken) {
-        throw new Error('No refresh token available')
-      }
+    console.log('[UserProvider] 初始化 Token Manager...')
+
+    // 1. 初始化 Token Manager（从 localStorage 恢复）
+    initTokenManager()
+
+    // 2. 设置 Token 刷新函数
+    setupTokenRefresh(async (refreshToken: string) => {
+      console.log('[UserProvider] 调用 Token 刷新函数...')
       return refreshTokenApi(refreshToken)
     })
+
+    // 3. 启动 Token 刷新定时器（主动刷新）
+    const cleanupTimer = startTokenRefreshTimer(30 * 1000) // 每 30 秒检查一次
+
+    console.log('[UserProvider] Token Manager 已初始化')
+
+    // 组件卸载时清理定时器
+    return () => {
+      cleanupTimer()
+      console.log('[UserProvider] Token 刷新定时器已停止')
+    }
   }, [])
 
   // 从服务器获取最新的用户信息
-  const refreshUser = useCallback(async () => {
+  const refreshUser = useCallback(async (silent: boolean = false) => {
     try {
-      setLoading(true)
+      // 只在没有本地数据且不是静默刷新时显示 loading
+      if (!hasLocalDataRef.current && !silent) {
+        setLoading(true)
+      }
       setError(null)
 
       if (!isAuthenticated()) {
         setUser(null)
         setLoading(false)
+        hasLocalDataRef.current = false
         return
       }
 
@@ -71,7 +91,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('userInfo', JSON.stringify(updatedUser))
       }
     } catch (err: any) {
-      console.error('Error fetching user info:', err)
+      console.error('[UserProvider] 获取用户信息失败:', err)
       setError(err.message)
 
       // 如果是认证错误，跳转到登录页
@@ -108,12 +128,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const clearUser = useCallback(() => {
     setUser(null)
     setError(null)
+    hasLocalDataRef.current = false
   }, [])
 
   // 初始化：从 localStorage 读取，然后从服务器获取最新数据
   useEffect(() => {
     const localUser = getLocalUserInfo()
     if (localUser) {
+      // 标记有本地数据
+      hasLocalDataRef.current = true
       // 先使用本地数据快速显示
       setUser({
         username: localUser.username,
@@ -121,26 +144,32 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         avatarUrl: localUser.avatar || null,
         bio: '',
       })
+      // 有本地数据时立即结束 loading 状态
+      setLoading(false)
     }
 
-    // 然后从服务器获取最新数据
-    refreshUser()
+    // 然后从服务器获取最新数据（静默更新）
+    refreshUser(true)
   }, [refreshUser])
 
   // 监听认证变化事件（登录/退出）
   useEffect(() => {
     const handleAuthChange = () => {
+      console.log('[UserProvider] 检测到认证状态变化')
       const localUser = getLocalUserInfo()
       if (localUser) {
+        hasLocalDataRef.current = true
         setUser({
           username: localUser.username,
           displayName: localUser.nickname || '',
           avatarUrl: localUser.avatar || null,
           bio: '',
         })
-        refreshUser()
+        setLoading(false)
+        refreshUser(true)
       } else {
         clearUser()
+        setLoading(false)
       }
     }
 
@@ -151,7 +180,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser, clearUser])
 
   return (
-    <UserContext.Provider value={{ user, loading, error, refreshUser, updateUser, clearUser }}>
+    <UserContext.Provider value={{ user, loading, error, refreshUser: () => refreshUser(), updateUser, clearUser }}>
       {children}
     </UserContext.Provider>
   )

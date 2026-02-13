@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
-import { login } from "@/lib/client-auth"
+import { login } from "@/lib/api/modules/auth"
 import { Github, Mail, Lock, ArrowRight } from "lucide-react"
+import { PublicRoute } from "@/components/auth/AuthGuard"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -53,7 +54,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4 -mt-16">
+    <PublicRoute>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4 -mt-16">
       <div className="w-full max-w-md">
         <Card>
         <CardHeader className="text-center">
@@ -135,5 +137,6 @@ export default function LoginPage() {
       </Card>
       </div>
     </div>
+    </PublicRoute>
   )
 }

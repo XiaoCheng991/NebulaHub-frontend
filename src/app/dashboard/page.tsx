@@ -1,38 +1,15 @@
 "use client"
 
-import React, { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Users, Activity, MessageCircle, FileText, TrendingUp, Settings, BarChart3, Sparkles } from "lucide-react"
 import LayoutWithFullWidth from "@/components/LayoutWithFullWidth"
-import { getLocalUserInfo } from "@/lib/client-auth"
-import { Loader2 } from "lucide-react"
+import { ProtectedRoute } from "@/components/auth/AuthGuard"
+import { useUser } from "@/lib/user-context"
 
 export default function DashboardPage() {
-  const router = useRouter()
-  const [user, setUser] = React.useState<any>(null)
-  const [loading, setLoading] = React.useState(true)
-
-  useEffect(() => {
-    const currentUser = getLocalUserInfo()
-    if (!currentUser) {
-      router.push("/login")
-      return
-    }
-    setUser(currentUser)
-    setLoading(false)
-  }, [])
-
-  if (loading) {
-    return (
-      <LayoutWithFullWidth>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutWithFullWidth>
-    )
-  }
+  const { user } = useUser()
 
   // Mock data for demonstration
   const stats = [
@@ -50,14 +27,15 @@ export default function DashboardPage() {
   ]
 
   return (
-    <LayoutWithFullWidth>
-      <div className="space-y-4">
+    <ProtectedRoute>
+      <LayoutWithFullWidth>
+        <div className="space-y-4">
         {/* Page Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-800">仪表盘</h1>
             <p className="text-slate-500 mt-1">
-              欢迎回来，{user?.nickname || user?.username}
+              欢迎回来，{user?.displayName || user?.username}
             </p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-xl border border-blue-500/20">
@@ -181,5 +159,6 @@ export default function DashboardPage() {
         </Card>
       </div>
     </LayoutWithFullWidth>
+    </ProtectedRoute>
   )
 }

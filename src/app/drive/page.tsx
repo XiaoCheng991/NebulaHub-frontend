@@ -1,11 +1,9 @@
 "use client"
 
-import React, { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { getLocalUserInfo } from "@/lib/client-auth"
 import {
   Folder,
   File,
@@ -18,36 +16,12 @@ import {
   MoreHorizontal,
   Search,
   Grid3X3,
-  List,
-  Loader2
+  List
 } from "lucide-react"
 import LayoutWithFullWidth from "@/components/LayoutWithFullWidth"
+import { ProtectedRoute } from "@/components/auth/AuthGuard"
 
 export default function DrivePage() {
-  const router = useRouter()
-  const [user, setUser] = React.useState<any>(null)
-  const [loading, setLoading] = React.useState(true)
-
-  useEffect(() => {
-    const currentUser = getLocalUserInfo()
-    if (!currentUser) {
-      router.push("/login")
-      return
-    }
-    setUser(currentUser)
-    setLoading(false)
-  }, [])
-
-  if (loading) {
-    return (
-      <LayoutWithFullWidth>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutWithFullWidth>
-    )
-  }
-
   // Mock data for demonstration
   const folders = [
     { id: "folder-1", name: "照片", size: "1.2 GB", modified: "2024-01-15", type: "folder" },
@@ -64,8 +38,9 @@ export default function DrivePage() {
   ]
 
   return (
-    <LayoutWithFullWidth>
-      <div className="space-y-4">
+    <ProtectedRoute>
+      <LayoutWithFullWidth>
+        <div className="space-y-4">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -262,5 +237,6 @@ export default function DrivePage() {
         </Card>
       </div>
     </LayoutWithFullWidth>
+    </ProtectedRoute>
   )
 }

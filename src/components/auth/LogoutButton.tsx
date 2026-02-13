@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { logout } from "@/lib/client-auth"
+import { logout } from "@/lib/api/modules/auth"
 
 export function LogoutButton({ className, iconOnly }: { className?: string, iconOnly?: boolean }) {
   const router = useRouter()

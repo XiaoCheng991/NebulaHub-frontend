@@ -13,7 +13,8 @@ import { AvatarCropDialog } from "@/components/ui/avatar-crop-dialog"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import LayoutWithFullWidth from "@/components/LayoutWithFullWidth"
 import { useUser } from "@/lib/user-context"
-import { uploadFile, put } from "@/lib/api-client"
+import { uploadFile, put } from "@/lib/api/client"
+import { ProtectedRoute } from "@/components/auth/AuthGuard"
 
 interface UserProfile {
   username: string
@@ -183,8 +184,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <LayoutWithFullWidth>
-      <div className="space-y-4">
+    <ProtectedRoute>
+      <LayoutWithFullWidth>
+        <div className="space-y-4">
         <div>
           <h1 className="text-3xl font-bold">账号设置</h1>
           <p className="text-muted-foreground mt-1">
@@ -359,5 +361,6 @@ export default function SettingsPage() {
         />
       )}
     </LayoutWithFullWidth>
+    </ProtectedRoute>
   )
 }

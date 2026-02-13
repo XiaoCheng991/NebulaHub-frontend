@@ -1,7 +1,11 @@
 /**
- * 核心 HTTP 客户端
- * 提供统一的请求方法，支持自动 Token 注入和刷新
- * 支持 SSR/CSR 自动适配
+ * 核心 HTTP 客户端（支持双 Token 无感刷新）
+ *
+ * 特性：
+ * - 自动注入 Access Token
+ * - 401 错误自动刷新 Token
+ * - 并发请求控制
+ * - 统一的鉴权拦截
  */
 
 import {
@@ -12,9 +16,10 @@ import {
 } from './types'
 import {
   getAccessToken,
-  refreshAccessToken,
   setTokenRefreshFn,
-} from '@/lib/auth/token-manager'
+  clearTokens,
+  ensureValidAccessToken,
+} from '@/lib/auth/dual-token-manager'
 import { apiLogger } from '@/lib/utils/logger'
 import { handleApiError } from '@/lib/utils/error-handler'
 
@@ -24,10 +29,51 @@ import { handleApiError } from '@/lib/utils/error-handler'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
 /**
- * 设置 Token 刷新函数（由调用方设置）
- * 这里我们使用 auth 模块的刷新函数
+ * 登录过期的错误消息列表
  */
-export function setupTokenRefresh(refreshFn: () => Promise<string>) {
+const LOGIN_EXPIRED_MESSAGES = [
+  '登录已过期',
+  '登录已过期，请重新登录',
+  'token已过期',
+  'token无效',
+  '未登录',
+  '认证失败',
+  '请先登录',
+]
+
+/**
+ * 检查错误消息是否表示登录过期
+ */
+function isLoginExpiredMessage(message: string): boolean {
+  return LOGIN_EXPIRED_MESSAGES.some(msg => message.includes(msg))
+}
+
+/**
+ * 清除认证信息并跳转到登录页
+ */
+function handleAuthExpired(): void {
+  console.warn('[Auth] 检测到登录过期，开始清理认证信息...')
+
+  // 清除本地存储
+  clearTokens()
+
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('userInfo')
+    window.dispatchEvent(new Event('auth-change'))
+  }
+
+  console.warn('[Auth] 认证信息已清理，即将跳转到登录页')
+
+  // 跳转到登录页
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login'
+  }
+}
+
+/**
+ * 设置 Token 刷新函数
+ */
+export function setupTokenRefresh(refreshFn: (refreshToken: string) => Promise<{ accessToken: string; refreshToken: string; expiresIn: number }>) {
   setTokenRefreshFn(refreshFn)
 }
 
@@ -119,12 +165,19 @@ async function request<T>(
 
   // 自动注入 Token（除非 skipAuth 为 true）
   if (!config.skipAuth) {
-    const token = getAccessToken()
-    if (token) {
-      config.headers = {
-        ...config.headers,
-        Authorization: `Bearer ${token}`,
+    try {
+      // 使用 ensureValidAccessToken 确保获取有效的 token
+      // 如果 token 已过期，会自动刷新
+      const token = await ensureValidAccessToken()
+      if (token) {
+        config.headers = {
+          ...config.headers,
+          Authorization: `Bearer ${token}`,
+        }
       }
+    } catch (error) {
+      // 无法获取有效 token，继续请求（可能返回 401）
+      console.warn('[API] 无法获取有效的 Access Token:', error)
     }
   }
 
@@ -145,9 +198,12 @@ async function request<T>(
     response = await applyResponseInterceptors(response)
 
     // 处理 401 未授权错误 - 尝试刷新 token
-    if (response.status === 401 && getAccessToken() && !config.skipAuth) {
+    if (response.status === 401 && !config.skipAuth) {
+      console.log('[API] 收到 401 响应，尝试刷新 Token...')
+
       try {
-        const newToken = await refreshAccessToken()
+        // 尝试刷新 token
+        const newToken = await ensureValidAccessToken()
 
         // 使用新 token 重试请求
         const retryConfig: RequestConfig = {
@@ -165,8 +221,12 @@ async function request<T>(
         )
 
         response = await applyResponseInterceptors(response)
+
+        console.log('[API] Token 刷新成功，重试请求')
       } catch (refreshError) {
         // Token 刷新失败
+        console.error('[API] Token 刷新失败:', refreshError)
+
         const metadata: RequestMetadata = {
           url,
           method: config.method || 'GET',
@@ -180,9 +240,7 @@ async function request<T>(
         apiLogger.requestError(metadata)
 
         // 清除 token 并跳转登录
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login'
-        }
+        handleAuthExpired()
 
         throw new ApiError('登录已过期，请重新登录', 401, refreshError as Error)
       }
@@ -206,7 +264,14 @@ async function request<T>(
 
       apiLogger.requestError(metadata)
 
-      throw new ApiError(errorData.message || '请求失败', response.status)
+      const errorMessage = errorData.message || `HTTP error! status: ${response.status}`
+
+      // 检查是否是登录过期相关的错误
+      if (isLoginExpiredMessage(errorMessage)) {
+        handleAuthExpired()
+      }
+
+      throw new ApiError(errorMessage, response.status)
     }
 
     // 解析响应
@@ -225,7 +290,14 @@ async function request<T>(
 
     // 检查业务状态码
     if (result.code !== 200) {
-      throw new ApiError(result.message || '请求失败', result.code)
+      const errorMessage = result.message || '请求失败'
+
+      // 关键：检查是否是登录过期的业务错误
+      if (isLoginExpiredMessage(errorMessage)) {
+        handleAuthExpired()
+      }
+
+      throw new ApiError(errorMessage, result.code)
     }
 
     return result
@@ -356,12 +428,12 @@ export async function uploadFile(
   // 处理 401 未授权错误 - 尝试刷新 token
   if (response.status === 401) {
     try {
-      token = await refreshAccessToken()
+      token = await ensureValidAccessToken()
       response = await uploadWithToken(token)
     } catch (refreshError) {
       // Token 刷新失败
       if (typeof window !== 'undefined') {
-        window.location.href = '/login'
+        handleAuthExpired()
       }
       throw new ApiError('登录已过期，请重新登录', 401, refreshError as Error)
     }
@@ -385,7 +457,14 @@ export async function uploadFile(
 
     apiLogger.requestError(metadata)
 
-    throw new ApiError(errorData.message || '上传失败', response.status)
+    const errorMessage = errorData.message || `HTTP error! status: ${response.status}`
+
+    // 检查是否是登录过期
+    if (isLoginExpiredMessage(errorMessage)) {
+      handleAuthExpired()
+    }
+
+    throw new ApiError(errorMessage, response.status)
   }
 
   const result = await response.json()
@@ -403,7 +482,14 @@ export async function uploadFile(
 
   // 检查业务状态码
   if (result.code !== 200) {
-    throw new ApiError(result.message || '上传失败', result.code)
+    const errorMessage = result.message || '上传失败'
+
+    // 检查是否是登录过期
+    if (isLoginExpiredMessage(errorMessage)) {
+      handleAuthExpired()
+    }
+
+    throw new ApiError(errorMessage, result.code)
   }
 
   // 返回文件 URL 和文件名

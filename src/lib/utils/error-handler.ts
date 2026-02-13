@@ -4,6 +4,7 @@
 
 import { ApiError } from '@/lib/api/types'
 import { apiLogger } from './logger'
+import { clearTokens } from '@/lib/auth/token-manager'
 
 /**
  * 错误类型枚举
@@ -61,6 +62,25 @@ export function getErrorType(statusCode: number, message?: string): ErrorType {
 }
 
 /**
+ * 处理认证错误：清除 token 并跳转登录页
+ */
+function handleAuthError() {
+  if (typeof window === 'undefined') return
+
+  // 清除 token
+  clearTokens()
+
+  // 清除用户信息
+  localStorage.removeItem('userInfo')
+
+  // 触发认证过期事件
+  window.dispatchEvent(new Event('auth-change'))
+
+  // 跳转到登录页
+  window.location.href = '/login'
+}
+
+/**
  * 处理 API 错误
  */
 export function handleApiError(
@@ -87,10 +107,10 @@ export function handleApiError(
     throw error
   }
 
-  // 认证错误：触发登出逻辑
-  if (errorType === ErrorType.AUTH && typeof window !== 'undefined') {
-    // 触发登出事件
-    window.dispatchEvent(new CustomEvent('auth-expired'))
+  // 认证错误（401/403）：清除 token 并跳转登录页
+  if (errorType === ErrorType.AUTH) {
+    apiLogger.auth('logout', { reason: errorMessage })
+    handleAuthError()
   }
 
   throw error

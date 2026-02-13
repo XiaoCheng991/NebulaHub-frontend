@@ -1,10 +1,17 @@
 /**
- * 认证相关 API
+ * 认证相关 API（使用双 Token 无感刷新）
  */
 
 import { get, post } from '../client'
 import type { ApiResponse } from '../types'
-import { setTokens, clearTokens } from '@/lib/auth/token-manager'
+import {
+  setTokens,
+  clearTokens,
+  isAuthenticated,
+  getTokenRemainingTime,
+  startTokenRefreshTimer,
+  type TokenPair,
+} from '@/lib/auth/dual-token-manager'
 
 /**
  * 登录请求
@@ -30,6 +37,7 @@ export interface RegisterRequest {
 export interface LoginResponse {
   token: string
   refreshToken: string
+  expiresIn: number // Access Token 过期时间（秒）
   userInfo: {
     id: number
     username: string
@@ -40,10 +48,50 @@ export interface LoginResponse {
 }
 
 /**
- * 刷新 Token 请求
+ * 刷新 Token 响应
  */
-export interface RefreshTokenRequest {
+export interface RefreshTokenResponse {
+  token: string
   refreshToken: string
+  expiresIn: number
+  userInfo: {
+    id: number
+    username: string
+    email: string
+    nickname: string
+    avatar: string | null
+  }
+}
+
+/**
+ * Token 刷新函数（供 Token Manager 调用）
+ */
+export async function refreshTokenApi(refreshToken: string): Promise<TokenPair> {
+  const response = await post<ApiResponse<RefreshTokenResponse>>('/api/auth/refresh-token', {
+    refreshToken,
+  })
+
+  if (response.code === 200 && response.data) {
+    const { token, refreshToken: newRefreshToken, expiresIn, userInfo } = response.data
+
+    // 更新用户信息
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('userInfo', JSON.stringify(userInfo))
+    }
+
+    // 触发自定义事件
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('auth-change'))
+    }
+
+    return {
+      accessToken: token,
+      refreshToken: newRefreshToken,
+      expiresIn,
+    }
+  }
+
+  throw new Error(response.message || '刷新 token 失败')
 }
 
 /**
@@ -53,12 +101,13 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
   const response = await post<ApiResponse<LoginResponse>>('/api/auth/login', data)
 
   if (response.code === 200 && response.data) {
-    const { token, refreshToken, userInfo } = response.data
+    const { token, refreshToken, expiresIn, userInfo } = response.data
 
     // 保存 token
     setTokens({
       accessToken: token,
       refreshToken: refreshToken,
+      expiresIn: expiresIn,
     })
 
     // 保存用户信息
@@ -66,7 +115,7 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
       localStorage.setItem('userInfo', JSON.stringify(userInfo))
     }
 
-    // 触发自定义事件，通知其他组件
+    // 触发自定义事件
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('auth-change'))
     }
@@ -84,12 +133,13 @@ export async function register(data: RegisterRequest): Promise<LoginResponse> {
   const response = await post<ApiResponse<LoginResponse>>('/api/auth/register', data)
 
   if (response.code === 200 && response.data) {
-    const { token, refreshToken, userInfo } = response.data
+    const { token, refreshToken, expiresIn, userInfo } = response.data
 
     // 保存 token
     setTokens({
       accessToken: token,
       refreshToken: refreshToken,
+      expiresIn: expiresIn,
     })
 
     // 保存用户信息
@@ -130,34 +180,6 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * 刷新 Token
- */
-export async function refreshTokenApi(refreshToken: string): Promise<string> {
-  const response = await post<ApiResponse<LoginResponse>>('/api/auth/refresh-token', {
-    refreshToken,
-  })
-
-  if (response.code === 200 && response.data) {
-    const { token, refreshToken: newRefreshToken, userInfo } = response.data
-
-    // 更新 token
-    setTokens({
-      accessToken: token,
-      refreshToken: newRefreshToken,
-    })
-
-    // 更新用户信息
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('userInfo', JSON.stringify(userInfo))
-    }
-
-    return token
-  }
-
-  throw new Error(response.message || '刷新 token 失败')
-}
-
-/**
  * 获取当前用户信息
  */
 export async function getUserInfo(): Promise<LoginResponse['userInfo']> {
@@ -191,3 +213,18 @@ export function getLocalUserInfo(): LoginResponse['userInfo'] | null {
   }
   return null
 }
+
+/**
+ * 检查是否已登录
+ */
+export { isAuthenticated }
+
+/**
+ * 获取 Token 剩余有效时间（秒）
+ */
+export { getTokenRemainingTime }
+
+/**
+ * 启动 Token 刷新定时器
+ */
+export { startTokenRefreshTimer }

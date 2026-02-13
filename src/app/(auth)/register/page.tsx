@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
-import { register } from "@/lib/client-auth"
+import { register } from "@/lib/api/modules/auth"
 import { Mail, Lock, User, ArrowRight, Check, Github } from "lucide-react"
+import { PublicRoute } from "@/components/auth/AuthGuard"
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("")
@@ -94,7 +95,8 @@ export default function RegisterPage() {
   ]
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4 -mt-16">
+    <PublicRoute>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 p-4 -mt-16">
       <div className="w-full max-w-md">
         <Card>
         <CardHeader className="text-center">
@@ -226,5 +228,6 @@ export default function RegisterPage() {
       </Card>
       </div>
     </div>
+    </PublicRoute>
   )
 }

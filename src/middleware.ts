@@ -1,34 +1,56 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export async function middleware(req: NextRequest) {
-  // 从cookie获取token（服务端）
-  const token = req.cookies.get('token')?.value
+/**
+ * Next.js 中间件 - 服务端路由保护
+ *
+ * 保护策略：
+ * 1. 公开页面：首页、登录、注册、忘记密码 - 无需认证
+ * 2. 受保护页面：dashboard、chat、drive、settings - 需要认证，未登录重定向到首页并提示
+ * 3. 已登录用户访问登录/注册页 -> 重定向到 dashboard
+ * 4. 已登录用户访问首页 -> 重定向到 dashboard
+ */
 
-  // 定义受保护的路径
-  const protectedPaths = ['/dashboard', '/chat', '/drive', '/settings']
-  const authPaths = ['/login', '/register']
+// 受保护的路径列表
+const protectedPaths = ['/dashboard', '/chat', '/drive', '/settings']
+
+// 公开路径（无需登录）
+const publicPaths = ['/', '/login', '/register', '/forgot-password']
+
+export async function middleware(req: NextRequest) {
+  // 从 cookie 获取 token（使用新的 auth_access_token key）
+  const token = req.cookies.get('auth_access_token')?.value
 
   const { pathname } = req.nextUrl
+  const isLoggedIn = !!token
 
-  // 检查是否是受保护的路径
-  const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path))
-  const isAuthPath = authPaths.some(path => pathname.startsWith(path))
-
-  // 如果访问受保护路径但没有token，重定向到登录页
-  if (isProtectedPath && !token) {
-    const url = req.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
-
-  // 如果已登录用户访问登录/注册页，重定向到dashboard
-  if (isAuthPath && token) {
+  // 情况1：已登录用户访问登录/注册页 -> 重定向到 dashboard
+  if ((pathname === '/login' || pathname === '/register') && isLoggedIn) {
     const url = req.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
+  // 情况2：已登录用户访问首页 -> 重定向到 dashboard
+  if (pathname === '/' && isLoggedIn) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // 情况3：未登录用户访问受保护页面 -> 重定向到首页并带上提示参数
+  const isProtectedPath = protectedPaths.some(path =>
+    pathname === path || pathname.startsWith(path + '/')
+  )
+
+  if (isProtectedPath && !isLoggedIn) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/'
+    url.searchParams.set('auth', 'required')
+    return NextResponse.redirect(url)
+  }
+
+  // 其他情况放行
   return NextResponse.next()
 }
 
