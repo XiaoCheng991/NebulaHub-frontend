@@ -223,6 +223,9 @@ export default function MusicPlayer() {
 
   const track = PLAYLIST[state.idx] || PLAYLIST[0];
 
+  // 若播放列表为空，整个按钮隐藏。
+  if (PLAYLIST.length === 0) return null;
+
   // Audio element bootstrap.
   useEffect(() => {
     const audio = new Audio();

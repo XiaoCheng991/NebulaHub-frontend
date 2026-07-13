@@ -20,20 +20,6 @@ export interface Track {
 }
 
 export const PLAYLIST: Track[] = [
-  {
-    title: "placeholder-01",
-    artist: "replace me",
-    // TODO: drop a local mp3 into public/audio/ and rewrite this path
-    src: "/audio/placeholder-01.mp3",
-  },
-  {
-    title: "placeholder-02",
-    artist: "replace me",
-    src: "/audio/placeholder-02.mp3",
-  },
-  {
-    title: "placeholder-03",
-    artist: "replace me",
-    src: "/audio/placeholder-03.mp3",
-  },
+  // 暂无音源。将 mp3 放入 /public/audio/ 后在此添加条目。
+  // 若列表为空，MusicPlayer 的 trigger 按钮会在 nav 中自动隐藏。
 ];

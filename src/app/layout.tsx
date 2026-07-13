@@ -4,10 +4,17 @@ import BackToTop from "@/components/BackToTop";
 import MusicPlayer from "@/components/MusicPlayer";
 import RssIcon from "@/components/RssIcon";
 import EasterEggs from "@/components/EasterEggs";
+import CmdK from "@/components/CmdK";
+import { posts } from "@/lib/posts";
+import { getDocsList } from "@/lib/docs";
 
 export const metadata: Metadata = {
   title: "Kyon // blog",
   description: "Kyon's Blog — 代码、想法与技术笔记",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    shortcut: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -18,7 +25,6 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/branding/logo/logo_icon.svg" />
         <link rel="alternate" type="application/rss+xml" title="Kyon // blog" href="/feed.xml" />
         <title></title>
       </head>
@@ -53,9 +59,9 @@ export default function RootLayout({
               >
                 [ about ]
               </a>
-              {/* Music trigger - in nav, opens a popover beneath it */}
-              <MusicPlayer />
-            </div>
+              {/* Music trigger - in nav, opens a popover beneath it.
+                  Renders nothing while PLAYLIST is empty. */}
+              <MusicPlayer />            </div>
           </nav>
         </header>
         <main className="pt-14 pb-24">
@@ -83,7 +89,10 @@ export default function RootLayout({
 
         {/* Client-only easter eggs (console banner + konami) */}
         <EasterEggs />
-      </body>
+
+        {/* Client-side Cmd+K search palette */}
+        <CmdK posts={posts} docs={getDocsList()} />
+        </body>
     </html>
   );
 }
