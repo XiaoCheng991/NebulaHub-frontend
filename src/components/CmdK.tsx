@@ -41,6 +41,8 @@ export default function CmdK({ posts = [], docs = [] }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const router = useRouter();
+  const openRef = useRef(open);
+  openRef.current = open;
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -73,19 +75,26 @@ export default function CmdK({ posts = [], docs = [] }: Props) {
     return scored.slice(0, 12).map((x) => x.it);
   }, [query, items]);
 
-  // Open / close triggers
+  // Keyboard: Ctrl/Cmd+K toggles, Esc closes (stable listener, no re-subscribe churn)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen((p) => !p);
-      } else if (e.key === "Escape" && open) {
+      } else if (e.key === "Escape" && openRef.current) {
         setOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, []);
+
+  // Open when the nav search box dispatches the global event
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("kyon:search", onOpen as EventListener);
+    return () => window.removeEventListener("kyon:search", onOpen as EventListener);
+  }, []);
 
   // Reset state on open / focus input
   useEffect(() => {

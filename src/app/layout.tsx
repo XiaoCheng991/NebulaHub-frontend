@@ -5,6 +5,7 @@ import MusicPlayer from "@/components/MusicPlayer";
 import RssIcon from "@/components/RssIcon";
 import EasterEggs from "@/components/EasterEggs";
 import CmdK from "@/components/CmdK";
+import SearchTrigger from "@/components/SearchTrigger";
 import { posts } from "@/lib/posts";
 import { getDocsList } from "@/lib/docs";
 
@@ -36,11 +37,12 @@ export default function RootLayout({
           <nav className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
             <a
               href="/"
-              className="text-primary font-mono text-lg tracking-wider font-bold text-glow nav-glow"
+              className="text-primary font-mono text-lg tracking-wider font-bold text-glow nav-glow shrink-0"
             >
               {'Kyon'}
             </a>
-            <div className="flex items-center gap-5 text-sm font-mono">
+            <div className="flex items-center gap-3 text-sm font-mono">
+              <SearchTrigger />
               <a
                 href="/"
                 className="text-foreground/70 hover:text-primary transition-colors nav-glow"
@@ -61,7 +63,8 @@ export default function RootLayout({
               </a>
               {/* Music trigger - in nav, opens a popover beneath it.
                   Renders nothing while PLAYLIST is empty. */}
-              <MusicPlayer />            </div>
+              <MusicPlayer />
+            </div>
           </nav>
         </header>
         <main className="pt-14 pb-24">
