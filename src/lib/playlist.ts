@@ -20,6 +20,14 @@ export interface Track {
 }
 
 export const PLAYLIST: Track[] = [
-  // 暂无音源。将 mp3 放入 /public/audio/ 后在此添加条目。
-  // 若列表为空，MusicPlayer 的 trigger 按钮会在 nav 中自动隐藏。
+  {
+    title: "Do It For The Show",
+    artist: "哲",
+    src: "/audio/Do It For The Show.mp3",
+  },
+  {
+    title: "Traffic",
+    artist: "maryjo",
+    src: "/audio/Traffic - maryjo[Traffic].flac",
+  },
 ];
