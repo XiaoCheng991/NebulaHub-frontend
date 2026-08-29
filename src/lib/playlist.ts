@@ -30,4 +30,9 @@ export const PLAYLIST: Track[] = [
     artist: "maryjo",
     src: "/audio/Traffic - maryjo[Traffic].flac",
   },
+  {
+    title: "A Broken Heart Heals with Time",
+    artist: "Dennis Kuo",
+    src: "/audio/A_Broken_Heart_Heals_with_Time.mp3",
+  },
 ];
