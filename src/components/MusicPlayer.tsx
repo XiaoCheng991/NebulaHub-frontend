@@ -284,9 +284,11 @@ export default function MusicPlayer() {
     } else {
       audioRef.current.pause();
     }
-  }, [state.playing]);
+  }, [state.playing, state.idx]);
 
   // RAF tick for the readout.
+  // Depends on state.idx so the RAF is cancelled when a new track loads,
+  // preventing it from overwriting currentTime with stale time values.
   useEffect(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (!state.playing) return;
@@ -299,7 +301,7 @@ export default function MusicPlayer() {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [state.playing]);
+  }, [state.playing, state.idx]);
 
   // Persistence.
   useEffect(() => {
@@ -369,6 +371,7 @@ export default function MusicPlayer() {
 
   const progressPct = duration ? (currentTime / duration) * 100 : 0;
   const volPct = state.volume * 100;
+
 
   return (
     <div
@@ -480,38 +483,61 @@ export default function MusicPlayer() {
               </button>
             </div>
 
-            {/* row: time stamp, centered under the controls */}
-            <div className="flex items-center justify-center text-foreground/40 tabular-nums text-[10px]">
-              {`${formatTime(currentTime)} / ${formatTime(duration)}`}
+            {/* row: time stamp, split left/right */}
+            <div className="flex items-center justify-between text-foreground/40 tabular-nums text-[10px] px-1">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
             </div>
 
-            {/* progress - drag to seek */}
+            {/* progress track + thumb */}
+            {/*
+              padding-left/right = 8px = half thumb width (16px).
+              This keeps the thumb centered exactly at the filled bar end
+              at 100% progress, with no gap and no overflow.
+              thumb x = progressPct% + 2.86%  (2.86 = 8px / 280px * 100)
+            */}
             <div
               ref={progressBarRef}
               onPointerDown={onProgressDown}
-              className="relative h-[3px] cursor-pointer group touch-none"
-              style={{ background: "hsl(var(--foreground) / 0.12)" }}
+              className="relative h-8 flex items-center cursor-pointer touch-none"
+              style={{ paddingLeft: 8, paddingRight: 8 }}
               aria-label="seek"
               role="slider"
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(progressPct)}
             >
+              {/* track background: solid subtle line */}
               <div
-                className="absolute left-0 top-0 h-full transition-[width] duration-100"
+                className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[3px] rounded-full"
+                style={{ background: "hsl(var(--foreground) / 0.12)" }}
+              />
+              {/* filled track: solid primary with glow, no transition */}
+              <div
+                className="absolute left-0 top-1/2 -translate-y-1/2 h-[3px] rounded-full"
                 style={{
                   width: `${progressPct}%`,
                   background: "hsl(var(--primary) / 0.80)",
+                  boxShadow: "0 0 6px hsl(var(--primary) / 0.30)",
                 }}
               />
+              {/* Sonic Orb thumb */}
               <div
-                className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{
-                  left: `${progressPct}%`,
-                  background: "hsl(var(--primary))",
-                  transform: "translate(-50%, -50%)",
-                }}
-              />
+                className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ left: `calc(${progressPct}% + 2.86%)`, transform: "translate(-50%, -50%)" }}
+              >
+                {/* pulse ring (CSS animation) */}
+                <div className="absolute inset-0 w-5 h-5 -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2 rounded-full pulse-ring" />
+                {/* SVG thumb: outer ring + filled core + center dot */}
+                <svg width={16} height={16} viewBox="0 0 16 16" className="relative" style={{ filter: "drop-shadow(0 0 5px hsl(var(--primary) / 0.65))" }}>
+                  {/* outer ring */}
+                  <circle cx="8" cy="8" r="6" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.2" opacity="0.9" />
+                  {/* filled core */}
+                  <circle cx="8" cy="8" r="3.5" fill="hsl(var(--primary))" />
+                  {/* center dot */}
+                  <circle cx="8" cy="8" r="1.2" fill="hsl(var(--background))" opacity="0.85" />
+                </svg>
+              </div>
             </div>
 
             {/* volume */}
