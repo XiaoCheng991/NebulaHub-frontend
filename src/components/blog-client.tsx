@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
 interface Item {
@@ -42,12 +43,16 @@ export default function BlogClient({
                 /* ---- with cover image: left thumb + right content ---- */
                 <div className="flex items-stretch">
                   <div className="shrink-0 w-[80px] sm:w-[100px] h-auto p-3 flex items-center justify-center">
-                    <img
+                    <Image
                       src={item.cover}
                       alt=""
                       className="w-full h-auto object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-300"
                       style={{ maxHeight: "96px" }}
-                      draggable={false}
+                      width={100}
+                      height={96}
+                      loading="lazy"
+                      decoding="async"
+                      fetchPriority="low"
                     />
                   </div>
                   <div className="flex-1 p-5 pt-3 sm:pt-5">

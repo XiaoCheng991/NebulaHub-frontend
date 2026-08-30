@@ -81,6 +81,9 @@ export default function AboutPage() {
               src="/avatar/XiaoCheng991.jpeg"
               alt="avatar"
               className="w-24 h-24 sm:w-32 sm:h-32 rounded-lg border border-primary/30 object-cover"
+              width={128}
+              height={128}
+              decoding="async"
             />
           </div>
           <div>

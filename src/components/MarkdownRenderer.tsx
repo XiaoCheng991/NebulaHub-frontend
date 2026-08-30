@@ -78,7 +78,7 @@ function wrapSections(md: string): string {
 }
 
 /* ------------------------------------------------------------------ */
-/*  CSS                                                                    */
+/*  CSS                                                                */
 /* ------------------------------------------------------------------ */
 
 const CSS_ID = "md-render-details";
@@ -208,9 +208,15 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
 
   useMemo(() => injectStyle(), []);
 
+  const htmlWithLazy = useMemo(() =>
+    html.replace(/<img([^>]*)>/gi, (_m, attrs) =>
+      attrs.includes('loading=') ? `<img${attrs}>` : `<img${attrs} loading="lazy">`
+    )
+  , [html]);
+
   return (
     <div className="md-render relative">
-      <div dangerouslySetInnerHTML={{ __html: html }} />
+      <div dangerouslySetInnerHTML={{ __html: htmlWithLazy }} />
     </div>
   );
 }
